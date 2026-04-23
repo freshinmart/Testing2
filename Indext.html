@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Riding - Navigasi Kendaraan Listrik</title>
+    
+    <!-- STANDARD VERCEL PWA META TAGS -->
+    <meta name="application-name" content="Riding" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Riding" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Aplikasi Navigasi & Kalkulator Jarak Tempuh dengan perhitungan fisika akurat. Bebas macet, anti-nyasar.">
+
+    <link rel="manifest" id="manifest-placeholder">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "react": "https://esm.sh/react@18.2.0",
+                "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+                "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+            }
+        }
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], },
+                    colors: {
+                        brand: { dark: '#0f172a', nav: '#3b82f6', ev: '#10b981', alert: '#fbbf24', urgent: '#ef4444' }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-20px)' }, }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // VERCEL GRADE PWA & SVG TO PNG CONVERTER
+        // ==========================================
+        
+        // 1. Definisikan SVG murni
+        const rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#ffffff"/><g transform="translate(256, 256) scale(0.6) translate(-256, -256)"><path d="M340 100 L140 200 L230 230 L260 320 Z" fill="#0f172a"/><text x="256" y="420" font-family="system-ui, sans-serif" font-weight="900" font-size="100" fill="#0f172a" text-anchor="middle">Riding<tspan fill="#3b82f6">.</tspan></text></g></svg>`;
+        
+        // 2. Konversi SVG ke PNG menggunakan Canvas untuk memenuhi standar format ikon PWA Vercel
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = function() {
+            ctx.drawImage(img, 0, 0);
+            const pngDataUrl = canvas.toDataURL('image/png'); // Format PNG dipastikan
+            
+            // 3. Generate Vercel-style Apple Touch Icons secara identik
+            const iconSizes = ['57x57', '60x60', '72x72', '76x76', '114x114', '120x120', '144x144', '152x152', '180x180'];
+            iconSizes.forEach(size => {
+                const link = document.createElement('link');
+                link.rel = 'apple-touch-icon';
+                link.sizes = size;
+                link.href = pngDataUrl;
+                document.head.appendChild(link);
+            });
+
+            // Set Favicon Utama PNG
+            const iconLink = document.createElement('link');
+            iconLink.rel = 'icon';
+            iconLink.type = 'image/png';
+            iconLink.href = pngDataUrl;
+            document.head.appendChild(iconLink);
+
+            // 4. Struktur Manifest ala Vercel (JSON)
+            const manifest = {
+                "name": "Riding Navigation",
+                "short_name": "Riding",
+                "description": "Aplikasi Navigasi & Kalkulator Jarak Tempuh dengan perhitungan fisika akurat.",
+                "start_url": window.location.href.split('?')[0] + "?mode=pwa", 
+                "display": "standalone",
+                "background_color": "#0f172a",
+                "theme_color": "#0f172a",
+                "icons": [
+                    { "src": pngDataUrl, "sizes": "192x192", "type": "image/png" },
+                    { "src": pngDataUrl, "sizes": "512x512", "type": "image/png" }
+                ],
+                "categories": ["navigation", "travel", "utilities"]
+            };
+            
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+            document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
+        };
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(rawSvg);
+
+        // ==========================================
+        // VERCEL-STYLE SERVICE WORKER (STALE-WHILE-REVALIDATE)
+        // ==========================================
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'vercel-riding-pwa-v4';
+                
+                self.addEventListener('install', (e) => {
+                    self.skipWaiting();
+                });
+                
+                self.addEventListener('activate', (e) => {
+                    e.waitUntil(
+                        caches.keys().then(keys => Promise.all(
+                            keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+                        ))
+                    );
+                    self.clients.claim();
+                });
+                
+                self.addEventListener('fetch', (e) => {
+                    if (e.request.method !== 'GET') return;
+                    
+                    e.respondWith(
+                        caches.open(CACHE_NAME).then(cache => {
+                            return cache.match(e.request).then(cachedResponse => {
+                                const fetchedResponse = fetch(e.request).then(networkResponse => {
+                                    cache.put(e.request, networkResponse.clone());
+                                    return networkResponse;
+                                }).catch(() => {
+                                    return cachedResponse;
+                                });
+                                return cachedResponse || fetchedResponse;
+                            });
+                        })
+                    );
+                });
+            `;
+            const swBlob = new Blob([swCode], {type: 'application/javascript'});
+            navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(err => console.log('SW Registration failed:', err));
+        }
+    </script>
+
+    <style>
+        body { margin: 0; padding: 0; overflow-x: hidden; width: 100%; height: 100%; background-color: #0f172a; font-family: 'Inter', sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glass-light { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-dark { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .glass-white { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.8); }
+
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            mask-image: linear-gradient(to bottom, transparent, black, transparent); -webkit-mask-image: linear-gradient(to bottom, transparent, black, transparent);
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .leaflet-control-container { display: none; }
+
+        .map-wrapper {
+            position: absolute; top: 50%; left: 50%; width: 150vmax; height: 150vmax;
+            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 0; transform-origin: center center; will-change: transform;
+        }
+
+        .nav-marker-container { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; position: relative; z-index: 9999; }
+        .nav-icon-arrow { width: 0; height: 0; border-left: 18px solid transparent; border-right: 18px solid transparent; border-bottom: 40px solid #3b82f6; position: relative; filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5)); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); will-change: transform; display: block; }
+        .nav-icon-arrow::after { content: ''; position: absolute; top: 34px; left: -18px; border-left: 18px solid transparent; border-right: 18px solid transparent; border-bottom: 10px solid #1d4ed8; }
+        .nav-icon-arrow-motor { border-bottom: 40px solid #10b981; }
+        .nav-icon-arrow-motor::after { border-bottom: 10px solid #047857; }
+        .nav-dot { width: 24px; height: 24px; background: #3b82f6; border: 4px solid white; border-radius: 50%; box-shadow: 0 4px 15px rgba(0,0,0,0.4); position: relative; }
+        .nav-dot::before { content: ''; position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); background: rgba(59, 130, 246, 0.4); border-radius: 50%; animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1); z-index: -1; }
+
+        @keyframes pulse-ring { 0% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(3); opacity: 0; } }
+        @keyframes slide-up-modal { from { transform: translateY(100%); opacity: 0;} to { transform: translateY(0); opacity: 1;} }
+        @keyframes slide-down-toast { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes slide-down-modal { from { transform: translateY(-20px); opacity: 0;} to { transform: translateY(0); opacity: 1;} }
+        
+        .animate-modal { animation: slide-up-modal 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-toast { animation: slide-down-toast 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-slide-down { animation: slide-down-modal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fade-in-up 0.8s ease-out forwards; opacity: 0; }
+
+        .route-line { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: dash 4s linear forwards infinite; }
+        @keyframes dash { to { stroke-dashoffset: 0; } }
+        
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Search, MapPin, Navigation, Loader2, Clock, X, Map as MapIcon, 
+            Zap, Plus, Minus, LocateFixed, Compass, Volume2, VolumeX,
+            ArrowUp, ArrowUpRight, ArrowRight, CornerDownRight, 
+            ArrowUpLeft, ArrowLeft, CornerDownLeft, RefreshCcw,
+            Car, Bike, Route, AlertTriangle, Star, Globe, Power, User, Settings, CheckCircle2,
+            Smartphone, ShieldCheck, DownloadCloud, Banknote, History, Shield, ChevronRight, Cpu, Battery, Gauge, Download, Circle,
+            BatteryCharging, ZapOff, Info, Mic
+        } from 'lucide-react';
+
+        // --- API CONFIG ---
+        const VALHALLA_BASE_URL = "https://valhalla1.openstreetmap.de/route";
+        const NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/search";
+        const PHOTON_BASE_URL = "https://photon.komoot.io/api/";
+        const DEFAULT_LOC = { lat: -6.195155, lon: 106.823282, heading: 0, speed: 0 }; 
+
+        // =====================================================================
+        // CORE PHYSICS ENGINE 
+        // =====================================================================
+        const calculateEvPhysics = (ah, volts, watt, speedKmh, vType) => {
+            if (speedKmh <= 0) return { range: 0, powerDraw: 0, efficiency: 0 };
+            const usableWh = (ah * volts) * 0.95; 
+            const velocityMs = speedKmh / 3.6; 
+            const gravity = 9.81; 
+            const rho = 1.225; 
+            
+            let m, Cd, A, Crr, eta, auxPower;
+            
+            if (vType === 'motor') {
+                m = 110 + 75 + (watt / 1000) * 1.5; 
+                Cd = 0.8; A = 0.7; Crr = 0.015; eta = 0.85; auxPower = 20; 
+            } else {
+                m = 1500 + (watt / 10000) * 10; 
+                Cd = 0.28; A = 2.4; Crr = 0.012; eta = 0.90; auxPower = 250; 
+            }
+            
+            const pDrag = 0.5 * rho * Cd * A * Math.pow(velocityMs, 3);
+            const pRoll = Crr * m * gravity * velocityMs;
+            const pMech = pDrag + pRoll;
+            const pElec = (pMech / eta) + auxPower;
+            const effWhKm = pElec / speedKmh;
+            const rangeKm = usableWh / effWhKm;
+            
+            return { range: Math.max(0, rangeKm), powerDraw: Math.max(0, pElec), efficiency: Math.max(0, effWhKm) };
+        };
+
+        const calculateAdvancedMotorPhysics = (ah, volts, watt, speedKmh, motorWeight, riderWeight, frontTire, rearTire) => {
+            if (speedKmh <= 0) return { range: 0, powerDraw: 0, efficiency: 0 };
+            const usableWh = (ah * volts) * 0.95; 
+            const velocityMs = speedKmh / 3.6; 
+            const gravity = 9.81; 
+            const rho = 1.225; 
+            const m = motorWeight + riderWeight; 
+            
+            const getTireSpecs = (tire) => {
+                let widthMm, sidewallMm, rimMm;
+                if (tire.type === 'metric') { widthMm = tire.w; sidewallMm = widthMm * (tire.r / 100); rimMm = tire.rim * 25.4; } 
+                else { widthMm = tire.wInch * 25.4; sidewallMm = widthMm; rimMm = tire.rim * 25.4; }
+                const diameterMm = rimMm + (2 * sidewallMm);
+                return { widthMm, radiusM: (diameterMm / 2) / 1000 };
+            };
+
+            const front = getTireSpecs(frontTire); const rear = getTireSpecs(rearTire);
+            const avgTireW = (front.widthMm + rear.widthMm) / 2;
+            const avgRadiusM = (front.radiusM + rear.radiusM) / 2;
+            
+            const driveWheelCircumference = 2 * Math.PI * rear.radiusM;
+            const wheelRpm = (velocityMs * 60) / driveWheelCircumference;
+            
+            const Cd = 0.8; const A = 0.65 + (front.widthMm / 1000) * 0.4; 
+            const Crr = 0.012 + (avgTireW * 0.00005) - (avgRadiusM * 0.005);
+            const finalCrr = Math.max(0.010, Crr); 
+            
+            const pDrag = 0.5 * rho * Cd * A * Math.pow(velocityMs, 3);
+            const pRoll = finalCrr * m * gravity * velocityMs;
+            const pMech = pDrag + pRoll;
+            
+            let eta = 0.85; 
+            if (wheelRpm > 900) eta -= 0.03; 
+            
+            const auxPower = 20; 
+            const pElec = (pMech / eta) + auxPower;
+            const effWhKm = pElec / speedKmh;
+            const rangeKm = usableWh / effWhKm;
+            
+            return { range: Math.max(0, rangeKm), powerDraw: Math.max(0, pElec), efficiency: Math.max(0, effWhKm) };
+        };
+
+        const TireInput = ({ label, tire, onChange }) => (
+            <div className="bg-slate-800 border border-slate-600 rounded-xl p-3">
+                <div className="flex justify-between items-center mb-2.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5"><Circle className="w-3 h-3 text-amber-500" /> {label}</label>
+                    <div className="flex bg-slate-900 rounded border border-slate-700 overflow-hidden">
+                        <button onClick={() => onChange({...tire, type: 'metric'})} className={`text-[9px] px-2 py-1 transition-colors ${tire.type === 'metric' ? 'bg-amber-500 text-slate-900 font-bold' : 'text-slate-400 hover:text-white'}`}>Metrik</button>
+                        <button onClick={() => onChange({...tire, type: 'imperial'})} className={`text-[9px] px-2 py-1 transition-colors ${tire.type === 'imperial' ? 'bg-amber-500 text-slate-900 font-bold' : 'text-slate-400 hover:text-white'}`}>Inci</button>
+                    </div>
+                </div>
+                {tire.type === 'metric' ? (
+                    <div className="flex items-center gap-1.5">
+                        <input type="number" value={tire.w} onChange={e=>onChange({...tire, w: Number(e.target.value)})} className="w-full bg-slate-900 text-white p-2 rounded-lg text-xs text-center border border-slate-700 focus:border-amber-500 outline-none transition-colors" placeholder="Lebar"/>
+                        <span className="text-slate-500 font-bold text-xs">/</span>
+                        <input type="number" value={tire.r} onChange={e=>onChange({...tire, r: Number(e.target.value)})} className="w-full bg-slate-900 text-white p-2 rounded-lg text-xs text-center border border-slate-700 focus:border-amber-500 outline-none transition-colors" placeholder="Rasio"/>
+                        <span className="text-slate-500 font-bold text-xs">-</span>
+                        <input type="number" value={tire.rim} onChange={e=>onChange({...tire, rim: Number(e.target.value)})} className="w-full bg-slate-900 text-white p-2 rounded-lg text-xs text-center border border-slate-700 focus:border-amber-500 outline-none transition-colors" placeholder="Velg"/>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5">
+                        <input type="number" step="0.25" value={tire.wInch} onChange={e=>onChange({...tire, wInch: Number(e.target.value)})} className="w-full bg-slate-900 text-white p-2 rounded-lg text-xs text-center border border-slate-700 focus:border-amber-500 outline-none transition-colors" placeholder="Lebar Ban (Inci)"/>
+                        <span className="text-slate-500 font-bold text-xs">-</span>
+                        <input type="number" value={tire.rim} onChange={e=>onChange({...tire, rim: Number(e.target.value)})} className="w-full bg-slate-900 text-white p-2 rounded-lg text-xs text-center border border-slate-700 focus:border-amber-500 outline-none transition-colors" placeholder="Velg (Inci)"/>
+                    </div>
+                )}
+            </div>
+        );
+
+        // =====================================================================
+        // COMPONENT: LANDING PAGE
+        // =====================================================================
+        const LandingPage = ({ onInstallReady }) => {
+            const [vehicleMode, setVehicleMode] = useState('motor');
+            const [scrolled, setScrolled] = useState(false);
+            const [showInstallModal, setShowInstallModal] = useState(false);
+            const [isRequestingPerms, setIsRequestingPerms] = useState(false);
+            
+            const [battType, setBattType] = useState('lifepo4');
+            const [battAh, setBattAh] = useState(20);
+            const [battV, setBattV] = useState(72);
+            const [chargerA, setChargerA] = useState(5);
+            const [dailyKm, setDailyKm] = useState(30);
+            const [motorW, setMotorW] = useState(1000);
+            const [batteryStats, setBatteryStats] = useState({ chargeTime: 0, lifespanYears: 0, totalKm: 0, cycles: 0 });
+
+            const [calcAh, setCalcAh] = useState(28);
+            const [calcV, setCalcV] = useState(72);
+            const [calcWatt, setCalcWatt] = useState(3000);
+            const [calcMotorW, setCalcMotorW] = useState(115);
+            const [calcRiderW, setCalcRiderW] = useState(70);
+            const [calcSpeed, setCalcSpeed] = useState(40);
+            
+            const [calcFrontTire, setCalcFrontTire] = useState({ type: 'metric', w: 90, r: 80, rim: 14, wInch: 2.75 });
+            const [calcRearTire, setCalcRearTire] = useState({ type: 'metric', w: 100, r: 80, rim: 14, wInch: 3.00 });
+
+            const [calcPhysicsData, setCalcPhysicsData] = useState({ range: 0, powerDraw: 0 });
+            const [isCalculating, setIsCalculating] = useState(false);
+            const calcTimeoutRef = useRef(null);
+
+            useEffect(() => {
+                const handleScroll = () => setScrolled(window.scrollY > 50);
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            useEffect(() => {
+                const getEfficiency = (watt) => 15 + (watt / 1000) * 10; 
+                const effWhKm = getEfficiency(motorW);
+                let dod = 0.9;
+                let maxCycles = 3000;
+                
+                if (battType === 'li-ion') { dod = 0.8; maxCycles = 1000; }
+                if (battType === 'sla') { dod = 0.5; maxCycles = 300; } 
+
+                const usableWh = (battAh * battV) * dod;
+                const rangePerCycle = usableWh / effWhKm;
+                const totalKm = maxCycles * rangePerCycle;
+                const lifespanYears = totalKm / (dailyKm * 365);
+                const chargeTime = (battAh / chargerA) * 1.1; 
+
+                setBatteryStats({ chargeTime: chargeTime.toFixed(1), lifespanYears: lifespanYears.toFixed(1), totalKm: Math.round(totalKm).toLocaleString('id-ID'), cycles: maxCycles });
+            }, [battType, battAh, battV, chargerA, dailyKm, motorW]);
+
+            useEffect(() => {
+                setIsCalculating(true);
+                if (calcTimeoutRef.current) clearTimeout(calcTimeoutRef.current);
+                
+                calcTimeoutRef.current = setTimeout(() => {
+                    const result = calculateAdvancedMotorPhysics(calcAh, calcV, calcWatt, calcSpeed, calcMotorW, calcRiderW, calcFrontTire, calcRearTire);
+                    setCalcPhysicsData({ range: result.range.toFixed(1), powerDraw: result.powerDraw.toFixed(0) });
+                    setIsCalculating(false);
+                }, 400); 
+            }, [calcAh, calcV, calcWatt, calcSpeed, calcMotorW, calcRiderW, calcFrontTire, calcRearTire]);
+
+            // ==========================================
+            // LOGIKA IZIN NATIVE (NOTIFIKASI) SEBELUM INSTALASI
+            // ==========================================
+            const triggerInstallAndPermissions = async () => {
+                setIsRequestingPerms(true);
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    try { await Notification.requestPermission(); } catch(e) {}
+                }
+                setIsRequestingPerms(false);
+
+                const canPrompt = await onInstallReady();
+                if(!canPrompt) {
+                    setShowInstallModal(true); 
+                }
+            };
+
+            const isMotor = vehicleMode === 'motor';
+            const themeColor = isMotor ? 'text-emerald-400' : 'text-blue-500';
+            const themeBg = isMotor ? 'bg-emerald-500' : 'bg-blue-600';
+
+            return (
+                <div className="min-h-screen bg-brand-dark selection:bg-blue-500/30 text-white">
+                    {/* Modal Petunjuk Instalasi Manual PWA */}
+                    {showInstallModal && (
+                        <div className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center px-4" onClick={() => setShowInstallModal(false)}>
+                            <div className="bg-white text-slate-800 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl animate-fade-in-up" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="text-xl font-black text-slate-900">Cara Menginstal Aplikasi</h3>
+                                    <button onClick={() => setShowInstallModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+                                </div>
+                                <div className="space-y-4 text-sm font-medium text-slate-600 leading-relaxed mb-6">
+                                    <p> </p>
+                                    <ol className="list-decimal pl-5 space-y-2">
+                                        <li>Ketuk ikon <strong>Menu (Tiga Titik)</strong> atau <strong>Share</strong> pada browser ponsel Anda.</li>
+                                        <li>Pilih pilihan <strong>Instal Aplikasi</strong> (Install App) atau <strong>Tambahkan ke Layar Utama</strong>.</li>
+                                        <li>Kemudian klik instal, setelah selesai buka aplikasi Riding.</li>
+                                    </ol>
+                                </div>
+                                <button onClick={() => setShowInstallModal(false)} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 transition">Mengerti</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Navigation */}
+                    <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? 'glass py-3' : 'bg-transparent py-5'}`}>
+                        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-white`}>
+                                    <Navigation className="w-5 h-5 text-slate-900" fill="currentColor"/>
+                                </div>
+                                <span className="text-xl font-black tracking-tight">Riding<span className={themeColor}>.</span></span>
+                            </div>
+                            <div className="hidden md:flex items-center gap-8 font-medium text-sm text-slate-300">
+                                <a href="#features" className="hover:text-white transition">Keunggulan</a>
+                                <a href="#battery-calc" className="hover:text-white transition">Usia Baterai</a>
+                                <a href="#hud" className="hover:text-white transition">Tampilan Navigasi</a>
+                            </div>
+                            <button onClick={triggerInstallAndPermissions} disabled={isRequestingPerms} className={`px-6 py-2.5 rounded-full font-bold text-sm transition-all hover:scale-105 active:scale-95 text-white shadow-lg flex items-center gap-2 ${themeBg} disabled:opacity-70 disabled:scale-100`}>
+                                {isRequestingPerms ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4" />} 
+                                Unduh
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Hero Section */}
+                    <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden flex flex-col items-center justify-center min-h-[90vh]">
+                        <div className="absolute inset-0 z-0 opacity-40 pointer-events-none">
+                            <div className="absolute inset-0 bg-grid"></div>
+                            <svg className="absolute w-full h-full opacity-60" viewBox="0 0 1000 600" preserveAspectRatio="none">
+                                <path d={isMotor ? "M-100,500 Q200,450 300,300 T600,150 T1100,50" : "M-100,100 Q300,150 400,350 T800,500 T1100,550"} fill="none" stroke={isMotor ? "#10b981" : "#3b82f6"} strokeWidth="6" className="route-line" style={{ filter: 'drop-shadow(0 0 8px currentColor)' }} />
+                            </svg>
+                            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-brand-dark/80 to-brand-dark"></div>
+                        </div>
+
+                        <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-slate-700 mb-8 animate-fade-in-up">
+                                <span className="relative flex h-2 w-2">
+                                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isMotor ? 'bg-emerald-400' : 'bg-blue-400'}`}></span>
+                                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isMotor ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                </span>
+                                <span className="text-xs font-bold text-slate-300 tracking-widest uppercase">PWA Tersinkronisasi Vercel</span>
+                            </div>
+                            
+                            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[1.1] mb-6 drop-shadow-2xl">
+                                Navigasi Cerdas.<br/><span className={themeColor}>Anti Macet & Nyasar.</span>
+                            </h1>
+                            
+                            <p className="text-lg md:text-xl text-slate-400 mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
+                                Dibuat khusus untuk hiruk-pikuk jalanan Indonesia. Temukan rute tercepat dengan pilihan jalan alternatif, serta prediksi baterai kendaraan listrik .
+                            </p>
+
+                            <div className="glass p-1.5 rounded-2xl inline-flex relative mx-auto mb-12 shadow-2xl">
+                                <div className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-xl transition-all duration-300 ease-out z-0 ${isMotor ? 'translate-x-full bg-emerald-500/20' : 'translate-x-0 bg-blue-500/20'}`}></div>
+                                <button onClick={() => setVehicleMode('car')} className={`relative z-10 flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-sm transition-colors ${!isMotor ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'}`}>
+                                    <Car className="w-5 h-5" /> Mobil Listrik
+                                </button>
+                                <button onClick={() => setVehicleMode('motor')} className={`relative z-10 flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-sm transition-colors ${isMotor ? 'text-emerald-400' : 'text-slate-400 hover:text-slate-200'}`}>
+                                    <Bike className="w-5 h-5" /> Motor Listrik
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Features Matrix */}
+                    <section id="features" className="py-24 relative z-10">
+                        <div className="max-w-7xl mx-auto px-6 md:px-12">
+                            <div className="text-center mb-16">
+                                <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4">Lebih Dari Sekadar Peta</h2>
+                                <p className="text-slate-400 font-medium">Teman perjalanan andalan Anda untuk taklukkan kerasnya jalanan perkotaan dan daerah.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="glass-light p-8 rounded-[2rem] hover:-translate-y-2 transition-transform duration-300">
+                                    <div className="w-14 h-14 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center mb-6"><Cpu className="w-7 h-7" /></div>
+                                    <h3 className="text-xl font-bold mb-3">Sistem Baterai Pintar</h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed">Lupakan persentase kasar yang tidak pasti. Aplikasi ini menghitung tarikan daya mesin dan sistem penggerak untuk menentukan sisa jarak secara tepat.</p>
+                                </div>
+                                <div className="glass-light p-8 rounded-[2rem] hover:-translate-y-2 transition-transform duration-300">
+                                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-6"><Route className="w-7 h-7" /></div>
+                                    <h3 className="text-xl font-bold mb-3">Jagoan Jalan Alternatif</h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed">Navigasi yang paham jalan spesifik untuk motor di Indonesia. Potong kompas kemacetan dengan jaminan rute anti masuk jalan buntu atau jalan tol.</p>
+                                </div>
+                                <div className="glass-light p-8 rounded-[2rem] hover:-translate-y-2 transition-transform duration-300">
+                                    <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-6"><Shield className="w-7 h-7" /></div>
+                                    <h3 className="text-xl font-bold mb-3">Tampilan Bebas Gangguan</h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed">Antarmuka navigasi yang bersih dan bebas iklan. Mode gelap penuh menjaga mata tetap rileks dan aman saat navigasi di malam hari tanpa membuat silau.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Battery Cycle Calculator */}
+                    <section id="battery-calc" className="py-24 border-y border-slate-800 bg-slate-900/50">
+                        <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col lg:flex-row items-center gap-16">
+                            <div className="flex-1 space-y-6">
+                                <div className="inline-block px-3 py-1 rounded-lg bg-slate-800 text-xs font-bold text-slate-300 uppercase tracking-widest">Analisis Daya</div>
+                                <h2 className="text-3xl md:text-5xl font-black tracking-tighter leading-tight">Perhitungan Usia Baterai & <span className="text-blue-500">Waktu Pengecasan.</span></h2>
+                                <p className="text-slate-400 text-lg leading-relaxed">
+                                    Hitung seberapa lama baterai kendaraan listrik Anda dapat bertahan hingga benar-benar menurun kualitasnya, serta prediksi lama waktu pengisian daya secara akurat dari persentase kosong hingga penuh.
+                                </p>
+                                
+                                <div className="glass p-6 md:p-8 rounded-3xl mt-8 shadow-xl border border-slate-700">
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Jenis Baterai</label>
+                                            <select value={battType} onChange={e => setBattType(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-blue-500 appearance-none cursor-pointer">
+                                                <option value="lifepo4">LiFePO4 (LFP)</option>
+                                                <option value="li-ion">Lithium-Ion (NMC)</option>
+                                                <option value="sla">Asam Timbal (SLA)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Jarak Harian Rata²</label>
+                                            <div className="relative">
+                                                <input type="number" value={dailyKm} onChange={e => setDailyKm(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 pr-10 text-white font-bold outline-none focus:border-blue-500" />
+                                                <span className="absolute right-3 top-3 text-slate-500 text-sm font-bold">km</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Kapasitas Baterai</label>
+                                            <div className="relative">
+                                                <input type="number" value={battAh} onChange={e => setBattAh(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 pr-10 text-white font-bold outline-none focus:border-blue-500" />
+                                                <span className="absolute right-3 top-3 text-slate-500 text-sm font-bold">Ah</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Voltase Baterai</label>
+                                            <div className="relative">
+                                                <input type="number" value={battV} onChange={e => setBattV(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 pr-10 text-white font-bold outline-none focus:border-blue-500" />
+                                                <span className="absolute right-3 top-3 text-slate-500 text-sm font-bold">V</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Kekuatan Charger</label>
+                                            <div className="relative">
+                                                <input type="number" value={chargerA} onChange={e => setChargerA(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 pr-10 text-white font-bold outline-none focus:border-blue-500" />
+                                                <span className="absolute right-3 top-3 text-slate-500 text-sm font-bold">A</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Daya Motor</label>
+                                            <div className="relative">
+                                                <input type="number" value={motorW} onChange={e => setMotorW(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 pr-10 text-white font-bold outline-none focus:border-blue-500" />
+                                                <span className="absolute right-3 top-3 text-slate-500 text-sm font-bold">W</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 w-full flex flex-col gap-4">
+                                <div className="glass bg-blue-900/30 border border-blue-500/30 p-6 rounded-3xl flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-blue-400 uppercase mb-1 flex items-center gap-2"><BatteryCharging className="w-5 h-5"/> Estimasi Pengecasan Penuh</h4>
+                                        <p className="text-xs text-slate-400">Dari posisi baterai benar-benar kosong</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-4xl font-black text-white">{batteryStats.chargeTime}</span>
+                                        <span className="text-sm font-bold text-slate-400 ml-1">Jam</span>
+                                    </div>
+                                </div>
+                                <div className="glass bg-emerald-900/30 border border-emerald-500/30 p-6 rounded-3xl flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-emerald-400 uppercase mb-1 flex items-center gap-2"><CheckCircle2 className="w-5 h-5"/> Usia Baterai Maksimal</h4>
+                                        <p className="text-xs text-slate-400">Berdasarkan siklus {batteryStats.cycles}x pengisian</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-4xl font-black text-white">{batteryStats.lifespanYears}</span>
+                                        <span className="text-sm font-bold text-slate-400 ml-1">Tahun</span>
+                                    </div>
+                                </div>
+                                <div className="glass bg-slate-800/80 border border-slate-700 p-6 rounded-3xl flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-300 uppercase mb-1 flex items-center gap-2"><ZapOff className="w-5 h-5"/> Total Jarak Perjalanan</h4>
+                                        <p className="text-xs text-slate-400">Sebelum kemampuan baterai menurun drastis</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-3xl font-black text-white">{batteryStats.totalKm}</span>
+                                        <span className="text-sm font-bold text-slate-400 ml-1">KM</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* HUD Concepts */}
+                    <section id="hud" className="py-24">
+                        <div className="max-w-7xl mx-auto px-6 md:px-12">
+                            <div className="text-center mb-16 max-w-3xl mx-auto">
+                                <h2 className="text-3xl md:text-4xl font-black tracking-tighter mb-4">Tampilan Navigasi Bebas Gangguan</h2>
+                                <p className="text-slate-400 font-medium leading-relaxed">Warna layar panel instruksi kami beradaptasi secara otomatis dengan tingkat kewaspadaan jalan di depan Anda, menjaga Anda tetap fokus menatap rute yang sebenarnya di jalan.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="glass-light p-6 rounded-[2rem] flex flex-col items-center text-center">
+                                    <div className="w-full bg-emerald-500 rounded-3xl p-4 flex items-center gap-4 shadow-lg shadow-emerald-500/20 mb-6">
+                                        <div className="bg-black/20 p-3 rounded-2xl text-white"><ArrowUp className="w-8 h-8"/></div>
+                                        <div className="text-left text-white">
+                                            <div className="text-2xl font-black">200m</div><div className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Jalan Terus</div>
+                                        </div>
+                                    </div>
+                                    <h4 className="font-bold mb-2">Jalur Aman & Lurus</h4>
+                                    <p className="text-xs text-slate-400">Warna hijau dan biru digunakan saat rute relatif lurus dan aman, membantu merilekskan pandangan mata Anda.</p>
+                                </div>
+
+                                <div className="glass-light p-6 rounded-[2rem] flex flex-col items-center text-center">
+                                    <div className="w-full bg-slate-800 border border-slate-700 rounded-3xl p-4 flex items-center gap-4 shadow-lg mb-6">
+                                        <div className="bg-black/30 p-3 rounded-2xl text-white"><CornerDownRight className="w-8 h-8"/></div>
+                                        <div className="text-left text-white">
+                                            <div className="text-2xl font-black">50m</div><div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Belok Kanan Tajam</div>
+                                        </div>
+                                    </div>
+                                    <h4 className="font-bold mb-2">Pergerakan Berbelok</h4>
+                                    <p className="text-xs text-slate-400">Tampilan beralih ke warna gelap dengan ikon penunjuk arah yang tajam agar Anda secara sadar mulai menurunkan kecepatan.</p>
+                                </div>
+
+                                <div className="glass-light p-6 rounded-[2rem] flex flex-col items-center text-center border-t-2 border-t-amber-500/50">
+                                    <div className="w-full bg-amber-500 rounded-3xl p-4 flex items-center gap-4 shadow-lg shadow-amber-500/20 mb-6">
+                                        <div className="bg-black/20 p-3 rounded-2xl text-white"><ArrowUpLeft className="w-8 h-8"/></div>
+                                        <div className="text-left text-white">
+                                            <div className="text-2xl font-black">100m</div><div className="text-[10px] font-bold uppercase tracking-widest text-amber-100">Serong Kiri</div>
+                                        </div>
+                                    </div>
+                                    <h4 className="font-bold mb-2">Percabangan Jalur</h4>
+                                    <p className="text-xs text-slate-400">Warna kontras yang mencolok saat Anda mendekati jalan bercabang, membantu Anda bersiap memilih lajur jalan yang tepat.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* NEW CALCULATOR SECTION */}
+                    <div className="w-full bg-blue-900/60 relative py-20 md:py-28 border-y border-blue-500/30">
+                        <div className="absolute inset-0 bg-grid opacity-30 mix-blend-overlay"></div>
+                        
+                        <section className="max-w-5xl mx-auto px-4 md:px-6 relative z-10 text-center">
+                            <h2 className="text-3xl md:text-5xl font-black tracking-tighter mb-4 text-white px-2">Perhitungan Jarak Tempuh Motor Listrik.</h2>
+                            <p className="text-blue-200 mb-12 max-w-2xl mx-auto px-4 font-medium leading-relaxed">Secara khusus dibuat untuk kendaraan roda dua. Masukkan spesifikasi motor Anda, aplikasi ini memperhitungkan berat total, gesekan aspal dari ukuran ban depan & belakang secara independen, hambatan udara, dan daya tarik mesin.</p>
+                            
+                            <div className="glass p-6 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-blue-400/30 shadow-[0_0_60px_rgba(59,130,246,0.3)] bg-slate-900/80">
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left mb-6">
+                                    {/* Kolom 1: Baterai & Dinamo */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-blue-400 font-bold text-sm uppercase tracking-widest flex items-center gap-2"><Zap className="w-4 h-4"/> Baterai & Mesin</h3>
+                                        
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Kapasitas Baterai (Ah)</label>
+                                            <input type="number" value={calcAh} onChange={e => setCalcAh(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-blue-500 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Voltase Baterai (V)</label>
+                                            <input type="number" value={calcV} onChange={e => setCalcV(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-blue-500 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Daya Dinamo (Watt)</label>
+                                            <input type="number" value={calcWatt} onChange={e => setCalcWatt(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-blue-500 transition-colors" />
+                                        </div>
+                                    </div>
+
+                                    {/* Kolom 2: Bobot */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-emerald-400 font-bold text-sm uppercase tracking-widest flex items-center gap-2"><User className="w-4 h-4"/> Berat</h3>
+                                        
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Berat Pengendara (Kg)</label>
+                                            <input type="number" value={calcRiderW} onChange={e => setCalcRiderW(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Berat Kendaraan (Kg)</label>
+                                            <input type="number" value={calcMotorW} onChange={e => setCalcMotorW(Number(e.target.value))} className="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 transition-colors" />
+                                        </div>
+                                        <div className="pt-2 flex items-start gap-2">
+                                            <Info className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                                            <p className="text-[10px] text-slate-400 leading-relaxed">Beban berat sangat berpengaruh saat berada dalam kondisi menanjak.</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Kolom 3: Roda & Ban */}
+                                    <div className="space-y-2.5">
+                                        <h3 className="text-amber-400 font-bold text-sm uppercase tracking-widest flex items-center gap-2 mb-2"><Circle className="w-4 h-4"/> Roda Depan & Belakang</h3>
+                                        <TireInput label="Ban Depan" tire={calcFrontTire} onChange={setCalcFrontTire} />
+                                        <TireInput label="Ban Belakang (Penggerak)" tire={calcRearTire} onChange={setCalcRearTire} />
+                                    </div>
+
+                                    {/* Speed Slider */}
+                                    <div className="col-span-1 md:col-span-3 mt-4 space-y-4">
+                                        <div className="flex justify-between items-end mb-6">
+                                            <label className="block text-[12px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2"><Gauge className="w-5 h-5 text-blue-400"/> Kecepatan berkendara</label>
+                                            <span className="text-4xl font-black text-blue-400">{calcSpeed} <span className="text-base font-bold text-slate-500">km/jam</span></span>
+                                        </div>
+                                        <input type="range" min="10" max="120" value={calcSpeed} onChange={e => setCalcSpeed(Number(e.target.value))} className="w-full h-3 bg-slate-700 rounded-full appearance-none cursor-pointer accent-blue-500" />
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-blue-500/20 pt-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                                    <div className="text-center md:text-left w-full md:w-auto">
+                                        <p className="text-sm font-bold text-blue-300 uppercase tracking-widest mb-1">Estimasi Jarak Tempuh</p>
+                                        <p className="text-xs text-slate-400 max-w-md leading-relaxed mt-2">Dihitung dari kekuatan hambatan udara, gaya putar roda belakang {calcRearTire.rim} inci, dan gesekan jalan pada kedua ban.</p>
+                                    </div>
+                                    <div className="flex items-baseline justify-center md:justify-end gap-2 min-w-[160px]">
+                                        {isCalculating ? (
+                                            <Loader2 className="w-14 h-14 animate-spin text-blue-400" />
+                                        ) : (
+                                            <>
+                                                <span className="text-7xl font-black tracking-tighter drop-shadow-[0_0_20px_rgba(59,130,246,0.6)] text-white">{calcPhysicsData.range}</span>
+                                                <span className="text-2xl font-bold text-blue-400 ml-1">km</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* CTA SECTION */}
+                    <section className="bg-brand-dark py-24 px-4 md:px-6 relative z-10 text-center">
+                        <div className="max-w-4xl mx-auto bg-[#0b1120] border border-slate-800 p-8 md:p-14 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-blue-500/20 blur-[60px] rounded-full pointer-events-none"></div>
+                            <div className="absolute -top-24 -left-24 w-64 h-64 bg-emerald-500/20 blur-[60px] rounded-full pointer-events-none"></div>
+                            
+                            <div className="flex items-center gap-2 mb-6 z-10">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white shadow-lg`}><Navigation className="w-7 h-7 text-slate-900" fill="currentColor"/></div>
+                                <span className="text-4xl font-black tracking-tight text-white">Riding<span className="text-blue-500">.</span></span>
+                            </div>
+                            <h3 className="text-2xl md:text-4xl font-black mb-4 z-10 text-white leading-tight">Siap Melintasi Jalanan Hari Ini?</h3>
+                            <p className="text-slate-400 max-w-lg mb-10 z-10 text-center text-sm md:text-base leading-relaxed">Cobalah pengalaman bernavigasi terbaru dari Riding secara intuitif dan cepat. Fitur navigasi cerdas ini dirancang sangat ringan tanpa memerlukan penyimpanan yang besar.</p>
+                            
+                            <button onClick={triggerInstallAndPermissions} disabled={isRequestingPerms} className="bg-white text-slate-900 px-6 py-4 md:px-10 md:py-4 rounded-2xl font-black text-base md:text-lg hover:bg-slate-200 transition-transform hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-3 z-10 w-full md:w-auto disabled:opacity-70 disabled:scale-100">
+                                {isRequestingPerms ? <Loader2 className="w-6 h-6 animate-spin text-slate-600"/> : <Smartphone className="w-6 h-6" />} 
+                                Instal ke Laci Aplikasi
+                            </button>
+                        </div>
+                    </section>
+
+                    {/* Final Footer */}
+                    <footer className="bg-brand-dark border-t border-white/5 py-8 relative z-10">
+                        <div className="max-w-4xl mx-auto px-6 text-center text-sm font-medium text-slate-500">
+                            <p>&copy; 2026 Riding Navigation. Hak Cipta Dilindungi.</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        // =====================================================================
+        // COMPONENT: CORE NAVIGATION APP
+        // =====================================================================
+        const RidingNavigation = () => {
+            const [userSettings, setUserSettings] = useState(() => {
+                const saved = localStorage.getItem('riding_settings');
+                return saved ? JSON.parse(saved) : { name: 'Pengendara', sensitivity: 'normal', avoidAlleys: true, defaultVehicle: 'motor', evConfig: { voltage: 72, capacityAh: 20, motorWatt: 2000, startPct: 100 } };
+            });
+            const [tripHistory, setTripHistory] = useState(() => {
+                const saved = localStorage.getItem('riding_history');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            const [appMode, setAppMode] = useState('explore'); 
+            const [showProfile, setShowProfile] = useState(false);
+            const [profileTab, setProfileTab] = useState('settings'); 
+            const [toast, setToast] = useState({ msg: '', visible: false });
+            
+            // Lokasi
+            const [currentLoc, setCurrentLoc] = useState(DEFAULT_LOC); 
+            const [deviceHeading, setDeviceHeading] = useState(0); 
+            const [isTracking, setIsTracking] = useState(true); 
+            const [voiceEnabled, setVoiceEnabled] = useState(true);
+            const [currentTime, setCurrentTime] = useState(new Date());
+            
+            // Pencarian & Rute
+            const [searchQuery, setSearchQuery] = useState('');
+            const [searchResults, setSearchResults] = useState([]);
+            const [isSearching, setIsSearching] = useState(false);
+            const [destination, setDestination] = useState(null); 
+            const [routes, setRoutes] = useState([]); 
+            const [activeRouteIdx, setActiveRouteIdx] = useState(0);
+            const [currentStepIndex, setCurrentStepIndex] = useState(0);
+            
+            // Konfigurasi Navigasi
+            const [vehicle, setVehicle] = useState(userSettings.defaultVehicle); 
+            const [avoidToll, setAvoidToll] = useState(false);
+            const [evMode, setEvMode] = useState(false);
+            const [evConfig, setEvConfig] = useState(userSettings.evConfig);
+            const [evRealtime, setEvRealtime] = useState({ currentPct: 100, consumedWh: 0, distanceTraveledNav: 0 });
+
+            const mapContainerRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const layersRef = useRef({ user: null, dest: null, routeLines: [], isNav: false });
+            const displayRotationRef = useRef(0); 
+            const prevLocRef = useRef({ lat: DEFAULT_LOC.lat, lon: DEFAULT_LOC.lon, rawLat: null, rawLon: null, timestamp: Date.now(), speed: 0 });
+            const spokenStepsRef = useRef({}); 
+            const watchIdRef = useRef(null);
+            const isFirstLoadRef = useRef(true);
+            
+            const stateRefs = useRef({ appMode, currentLoc, routes, activeRouteIdx, currentStepIndex, evMode, evConfig, evRealtime, voiceEnabled });
+            useEffect(() => { stateRefs.current = { appMode, currentLoc, routes, activeRouteIdx, currentStepIndex, evMode, evConfig, evRealtime, voiceEnabled }; }, [appMode, currentLoc, routes, activeRouteIdx, currentStepIndex, evMode, evConfig, evRealtime, voiceEnabled]);
+            useEffect(() => { localStorage.setItem('riding_settings', JSON.stringify(userSettings)); }, [userSettings]);
+            useEffect(() => { localStorage.setItem('riding_history', JSON.stringify(tripHistory)); }, [tripHistory]);
+            useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 60000); return () => clearInterval(timer); }, []);
+
+            const showToast = useCallback((msg) => {
+                setToast({ msg, visible: true });
+                setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+            }, []);
+
+            const formatRp = (num) => 'Rp ' + num.toLocaleString('id-ID');
+
+            const calculateBearing = (lat1, lon1, lat2, lon2) => {
+                const toRad = x => x * Math.PI / 180; const toDeg = x => x * 180 / Math.PI;
+                const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+                const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+                return (toDeg(Math.atan2(y, x)) + 360) % 360;
+            };
+
+            const getDistance = (lat1, lon1, lat2, lon2) => {
+                const R = 6371e3; const toRad = x => x * Math.PI/180;
+                const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            };
+
+            const getRouteSnapInfo = (userLat, userLon, polylineCoords) => {
+                if (!polylineCoords || polylineCoords.length < 2) return null;
+                let minDist = Infinity; let snappedPoint = { lat: userLat, lon: userLon }; let roadHeading = 0;
+                const toRad = x => x * Math.PI / 180;
+                for (let i = 0; i < polylineCoords.length - 1; i++) {
+                    const lat1 = polylineCoords[i][1], lon1 = polylineCoords[i][0];
+                    const lat2 = polylineCoords[i+1][1], lon2 = polylineCoords[i+1][0];
+                    const x1 = lon1 * Math.cos(toRad(lat1)), y1 = lat1;
+                    const x2 = lon2 * Math.cos(toRad(lat2)), y2 = lat2;
+                    const xU = userLon * Math.cos(toRad(userLat)), yU = userLat;
+                    const dx = x2 - x1, dy = y2 - y1; const lenSq = dx*dx + dy*dy;
+                    let t = 0; if (lenSq !== 0) t = Math.max(0, Math.min(1, ((xU - x1) * dx + (yU - y1) * dy) / lenSq));
+                    const projX = x1 + t * dx, projY = y1 + t * dy;
+                    const projLat = projY, projLon = projX / Math.cos(toRad(projLat));
+                    const dist = getDistance(userLat, userLon, projLat, projLon);
+                    if (dist < minDist) { minDist = dist; snappedPoint = { lat: projLat, lon: projLon }; roadHeading = calculateBearing(lat1, lon1, lat2, lon2); }
+                }
+                return { snappedPoint, minDist, roadHeading };
+            };
+
+            const decodePolyline = (str, precision = 6) => {
+                let index = 0, lat = 0, lng = 0, coordinates = [], shift = 0, result = 0, byte = null, lat_change, lng_change, factor = Math.pow(10, precision);
+                while (index < str.length) {
+                    byte = null; shift = 0; result = 0;
+                    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+                    lat_change = ((result & 1) ? ~(result >> 1) : (result >> 1)); shift = result = 0;
+                    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+                    lng_change = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                    lat += lat_change; lng += lng_change; coordinates.push([lng / factor, lat / factor]); 
+                }
+                return coordinates;
+            };
+
+            const getManeuverInfo = (type) => {
+                if ([5,6,7].includes(type)) return { type: 'arrive', modifier: 'arrive', text: 'Tujuan sudah dekat' };
+                if ([10, 17].includes(type)) return { type: 'turn', modifier: 'slight right', text: 'Serong kanan' };
+                if ([11].includes(type)) return { type: 'turn', modifier: 'right', text: 'Belok kanan' };
+                if ([12].includes(type)) return { type: 'turn', modifier: 'sharp right', text: 'Belok kanan tajam' };
+                if ([13, 14].includes(type)) return { type: 'turn', modifier: 'uturn', text: 'Putar balik' };
+                if ([15].includes(type)) return { type: 'turn', modifier: 'sharp left', text: 'Belok kiri tajam' };
+                if ([16].includes(type)) return { type: 'turn', modifier: 'left', text: 'Belok kiri' };
+                if ([17].includes(type)) return { type: 'turn', modifier: 'slight left', text: 'Serong kiri' };
+                return { type: 'turn', modifier: 'straight', text: 'Jalan lurus' };
+            };
+
+            const getManeuverStyles = (modifier) => {
+                switch (modifier) {
+                    case 'slight right': return { card: 'bg-blue-600 text-white border-blue-500', iconBg: 'bg-black/20 text-white', accent: 'text-blue-100' };
+                    case 'slight left': return { card: 'bg-red-500 text-white border-red-400', iconBg: 'bg-black/20 text-white', accent: 'text-red-100' };
+                    case 'right': case 'sharp right': return { card: 'bg-white text-slate-900 border-slate-200', iconBg: 'bg-slate-100 text-slate-800', accent: 'text-slate-500' };
+                    case 'left': case 'sharp left': return { card: 'bg-slate-900 text-white border-slate-700', iconBg: 'bg-slate-800 text-white', accent: 'text-slate-400' };
+                    case 'straight': return { card: 'bg-emerald-500 text-white border-emerald-400', iconBg: 'bg-black/20 text-white', accent: 'text-emerald-100' };
+                    case 'uturn': return { card: 'bg-amber-400 text-slate-900 border-amber-300', iconBg: 'bg-black/10 text-slate-900', accent: 'text-amber-800' };
+                    case 'arrive': return { card: 'bg-teal-600 text-white border-teal-500', iconBg: 'bg-black/20 text-white', accent: 'text-teal-100' };
+                    default: return { card: 'bg-slate-800 text-white border-slate-700', iconBg: 'bg-black/30 text-white', accent: 'text-slate-400' };
+                }
+            };
+
+            const speakInstruction = (text) => {
+                if (!stateRefs.current.voiceEnabled || !window.speechSynthesis) return;
+                window.speechSynthesis.cancel(); 
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'id-ID'; utterance.rate = 0.95; utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            };
+
+            const formatDistanceAudio = (meters) => {
+                if (meters > 1000) return `${(meters / 1000).toFixed(1).replace('.', ' koma ')} Kilometer`;
+                return `${Math.round(meters / 10) * 10} Meter`;
+            };
+
+            const stopNavigation = () => {
+                if (appMode === 'navigating' && routes[activeRouteIdx]) {
+                    const activeRoute = routes[activeRouteIdx];
+                    const destName = destination?.name || 'Tujuan Terakhir';
+                    const routeDistKm = activeRoute.distance / 1000;
+                    let actualDist = evRealtime.distanceTraveledNav > 0 ? evRealtime.distanceTraveledNav : routeDistKm;
+                    let finalConsumedWh = evRealtime.consumedWh;
+                    
+                    if (finalConsumedWh <= 0) {
+                        const avgSpeedKmh = vehicle === 'motor' ? 40 : 60;
+                        const timeHours = actualDist / avgSpeedKmh;
+                        const physRes = calculateEvPhysics(evConfig.capacityAh, evConfig.voltage, evConfig.motorWatt, avgSpeedKmh, vehicle);
+                        finalConsumedWh = physRes.powerDraw * timeHours; 
+                    }
+
+                    let cost = 0; let batteryLeft = evConfig.startPct;
+
+                    if (evMode) {
+                        const consumedKwh = finalConsumedWh / 1000;
+                        const energyCost = consumedKwh * 2466; 
+                        cost = energyCost + 2500 + ((energyCost + 2500) * 0.11); 
+                        if (evRealtime.currentPct === evConfig.startPct) {
+                            const totalWh = evConfig.capacityAh * evConfig.voltage;
+                            const remainingWh = (totalWh * (evConfig.startPct / 100)) - finalConsumedWh;
+                            batteryLeft = Math.max(0, (remainingWh / totalWh) * 100);
+                        } else {
+                            batteryLeft = evRealtime.currentPct;
+                        }
+                    } else {
+                        const liters = actualDist / (vehicle === 'motor' ? 45 : 12);
+                        const bbmCost = liters * 13000;
+                        cost = bbmCost + 2500 + ((bbmCost + 2500) * 0.11);
+                        batteryLeft = null;
+                    }
+
+                    setTripHistory(prev => [{ id: Date.now(), date: new Date().toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}), destination: destName, distanceKm: actualDist.toFixed(1), vehicle: vehicle, evMode: evMode, batteryRemaining: batteryLeft !== null ? batteryLeft.toFixed(0) : null, cost: Math.round(cost) }, ...prev].slice(0, 50));
+                }
+
+                setAppMode('explore'); setIsTracking(true); window.speechSynthesis?.cancel(); 
+                layersRef.current.routeLines.forEach(l => l.remove());
+                setEvRealtime({ currentPct: evConfig.startPct, consumedWh: 0, distanceTraveledNav: 0 });
+            };
+
+            const initMap = () => {
+                if (!mapContainerRef.current || mapInstanceRef.current) return;
+                const map = window.L.map(mapContainerRef.current, { zoomControl: false, attributionControl: false }).setView([DEFAULT_LOC.lat, DEFAULT_LOC.lon], 16); 
+                window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20 }).addTo(map);
+                mapInstanceRef.current = map;
+                updateUserMarker(DEFAULT_LOC, false, vehicle);
+            };
+
+            const handleLocationError = (err) => {
+            };
+
+            const startGpsTracking = () => {
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => { handlePositionUpdate(pos); setIsTracking(true); },
+                        handleLocationError,
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+
+                    if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+                    watchIdRef.current = navigator.geolocation.watchPosition(
+                        (pos) => handlePositionUpdate(pos),
+                        handleLocationError,
+                        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                    );
+                } else { showToast("Perangkat tidak mendukung sistem lokasi GPS."); }
+            };
+
+            useEffect(() => {
+                // Alur Meminta Izin Krusial secara berurutan sesuai perintah (PWA)
+                const requestSequentialPermissions = async () => {
+                    // 1. Izin Notifikasi
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        try { await Notification.requestPermission(); } catch(e) {}
+                    }
+                    
+                    // 2. Izin Suara/Mikrofon (Khusus iOS/Chrome agar Voice API terbuka)
+                    try {
+                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            stream.getTracks().forEach(track => track.stop()); // Hanya untuk otorisasi sistem
+                        }
+                    } catch(e) { console.warn("Persetujuan mikrofon/suara dilewati"); }
+                    
+                    // 3. Aktivasi Speech Synthesis
+                    if ('speechSynthesis' in window) {
+                        const initSpeech = new SpeechSynthesisUtterance('');
+                        window.speechSynthesis.speak(initSpeech);
+                    }
+
+                    // 4. Inisiasi GPS
+                    startGpsTracking();
+                };
+
+                if(isFirstLoadRef.current) {
+                    requestSequentialPermissions();
+                    initMap();
+                    isFirstLoadRef.current = false;
+                }
+                
+                const handleOrientation = (e) => { const heading = e.webkitCompassHeading || (360 - e.alpha) || 0; setDeviceHeading(heading); };
+                window.addEventListener('deviceorientation', handleOrientation);
+                
+                return () => {
+                    window.removeEventListener('deviceorientation', handleOrientation);
+                    if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current);
+                };
+            }, []);
+
+            const handlePositionUpdate = (pos) => {
+                const { latitude: rawLat, longitude: rawLon, speed: rawSpeedMs } = pos.coords;
+                const now = Date.now();
+                
+                let currentSpeedMs = rawSpeedMs;
+                if ((currentSpeedMs === null || currentSpeedMs === undefined) && prevLocRef.current.rawLat) {
+                    const dtSeconds = (now - prevLocRef.current.timestamp) / 1000;
+                    if (dtSeconds > 0) { currentSpeedMs = getDistance(prevLocRef.current.rawLat, prevLocRef.current.rawLon, rawLat, rawLon) / dtSeconds; } 
+                    else { currentSpeedMs = 0; }
+                }
+                if (currentSpeedMs > 50) currentSpeedMs = prevLocRef.current.speed || 0; 
+                let speedKmh = currentSpeedMs * 3.6; let finalHeading = pos.coords.heading || deviceHeading; 
+
+                const { appMode, routes, activeRouteIdx, currentStepIndex, evMode, evConfig, evRealtime } = stateRefs.current;
+                const isNav = appMode === 'navigating'; const activeRoute = routes[activeRouteIdx];
+                let finalLat = rawLat, finalLon = rawLon;
+
+                if (isNav && activeRoute) {
+                    const snapInfo = getRouteSnapInfo(rawLat, rawLon, activeRoute.geometry.coordinates);
+                    if (snapInfo) {
+                        if (snapInfo.minDist > 50) {
+                            let foundAlt = false;
+                            for (let i = 0; i < routes.length; i++) {
+                                if (i === activeRouteIdx) continue;
+                                const altSnap = getRouteSnapInfo(rawLat, rawLon, routes[i].geometry.coordinates);
+                                if (altSnap && altSnap.minDist <= 50) {
+                                    setActiveRouteIdx(i); setCurrentStepIndex(0); spokenStepsRef.current = {};
+                                    drawRoutesOnMap(routes, i, vehicle);
+                                    // Notifikasi pengalihan rute dihapus/disembunyikan agar bersih dari pesan kesalahan/interupsi di layer UI
+                                    finalLat = altSnap.snappedPoint.lat; finalLon = altSnap.snappedPoint.lon; finalHeading = altSnap.roadHeading;
+                                    foundAlt = true; break;
+                                }
+                            }
+                            if (!foundAlt) {
+                                finalHeading = pos.coords.heading || finalHeading;
+                            }
+                        } else { finalLat = snapInfo.snappedPoint.lat; finalLon = snapInfo.snappedPoint.lon; finalHeading = snapInfo.roadHeading; }
+                    }
+
+                    const steps = activeRoute.legs[0].steps;
+                    if (currentStepIndex < steps.length - 1) {
+                        const nextStep = steps[currentStepIndex + 1];
+                        const distToNext = getDistance(finalLat, finalLon, nextStep.maneuver.location[1], nextStep.maneuver.location[0]);
+                        if (distToNext < 25) { setCurrentStepIndex(currentStepIndex + 1); } 
+                        else {
+                            if (!spokenStepsRef.current[currentStepIndex]) spokenStepsRef.current[currentStepIndex] = { far: false, near: false };
+                            const spokenStatus = spokenStepsRef.current[currentStepIndex];
+                            let instructionText = nextStep.name ? `${nextStep.maneuver.text} menuju jalan ${nextStep.name}` : nextStep.maneuver.text;
+                            if (distToNext <= 1000 && distToNext >= 500 && !spokenStatus.far) { spokenStatus.far = true; speakInstruction(`Dalam jarak ${formatDistanceAudio(distToNext)}, ${instructionText}`); }
+                            if (distToNext <= Math.max(50, speedKmh * 3) && !spokenStatus.near) { spokenStatus.near = true; speakInstruction(`Persiapkan diri Anda, ${instructionText}`); }
+                        }
+                    }
+                }
+
+                if (evMode && isNav && prevLocRef.current.rawLat) {
+                    const distDeltaKm = getDistance(prevLocRef.current.rawLat, prevLocRef.current.rawLon, rawLat, rawLon) / 1000;
+                    if (distDeltaKm > 0 && speedKmh > 2) {
+                        const physRes = calculateEvPhysics(evConfig.capacityAh, evConfig.voltage, evConfig.motorWatt, speedKmh, vehicle);
+                        const whConsumed = physRes.efficiency * distDeltaKm;
+                        const totalKwh = evConfig.capacityAh * evConfig.voltage;
+                        const newConsumed = evRealtime.consumedWh + whConsumed;
+                        const newPct = Math.max(0, (((totalKwh * (evConfig.startPct / 100)) - newConsumed) / totalKwh) * 100);
+                        setEvRealtime(prev => ({ currentPct: newPct, consumedWh: newConsumed, distanceTraveledNav: prev.distanceTraveledNav + distDeltaKm }));
+                    }
+                }
+
+                const newLoc = { lat: finalLat, lon: finalLon, heading: finalHeading, speed: currentSpeedMs };
+                setCurrentLoc(newLoc);
+                prevLocRef.current = { lat: finalLat, lon: finalLon, rawLat: rawLat, rawLon: rawLon, timestamp: now, speed: currentSpeedMs, heading: finalHeading };
+                updateUserMarker(newLoc, isNav, vehicle);
+            };
+
+            useEffect(() => {
+                if (!mapInstanceRef.current || !currentLoc || !isTracking) return;
+                mapInstanceRef.current.panTo([currentLoc.lat, currentLoc.lon], { animate: true, duration: 0.5, easeLinearity: 0.25 });
+            }, [currentLoc, isTracking]);
+
+            const updateUserMarker = (loc, isNav, selectedVehicle) => {
+                if (!mapInstanceRef.current) return;
+                let targetRot = isNav ? loc.heading : deviceHeading;
+                let delta = (targetRot - displayRotationRef.current) % 360;
+                if (delta > 180) delta -= 360; if (delta < -180) delta += 360;
+                displayRotationRef.current += delta;
+
+                const arrowClass = selectedVehicle === 'motor' ? 'nav-icon-arrow nav-icon-arrow-motor' : 'nav-icon-arrow';
+                const iconHtml = isNav ? `<div class="nav-marker-container"><div class="${arrowClass}" style="transform: rotate(${displayRotationRef.current}deg)"></div></div>` : `<div class="nav-marker-container"><div class="nav-dot"></div></div>`;
+
+                if (layersRef.current.user) {
+                    layersRef.current.user.setLatLng([loc.lat, loc.lon]);
+                    if (layersRef.current.isNav === isNav) { if (isNav) { const arrowEl = document.querySelector('.nav-icon-arrow'); if (arrowEl) arrowEl.style.transform = `rotate(${displayRotationRef.current}deg)`; } } 
+                    else { layersRef.current.user.setIcon(window.L.divIcon({ html: iconHtml, className: 'bg-transparent', iconSize: [64, 64], iconAnchor: [32, 32] })); layersRef.current.isNav = isNav; }
+                } else {
+                    layersRef.current.user = window.L.marker([loc.lat, loc.lon], { icon: window.L.divIcon({ html: iconHtml, className: 'bg-transparent', iconSize: [64, 64], iconAnchor: [32, 32] }), zIndexOffset: 1000 }).addTo(mapInstanceRef.current);
+                    layersRef.current.isNav = isNav;
+                }
+            };
+
+            const fetchRouteData = async (destLat, destLon, selectedVehicle, isAvoidToll, customStart = null) => {
+                const loc = customStart || stateRefs.current.currentLoc;
+                let costing = selectedVehicle === 'motor' ? 'motorcycle' : 'auto';
+                let reqObj = { locations: [ { lat: loc.lat, lon: loc.lon }, { lat: destLat, lon: destLon } ], costing: costing, directions_options: { units: 'kilometers', language: 'id-ID' }, alternates: 2, costing_options: { [costing]: { use_tolls: (isAvoidToll || selectedVehicle === 'motor') ? 0 : 1, use_living_streets: userSettings.avoidAlleys ? 0.1 : 1, use_tracks: userSettings.avoidAlleys ? 0 : 1 } } };
+
+                try {
+                    const res = await fetch(`${VALHALLA_BASE_URL}?json=${encodeURIComponent(JSON.stringify(reqObj))}`);
+                    const data = await res.json();
+                    if (data.trip && data.trip.legs) {
+                        let fetchedRoutes = [];
+                        const processTrip = (t) => {
+                            const coords = decodePolyline(t.legs[0].shape, 6);
+                            const steps = t.legs[0].maneuvers.map(m => ({ distance: m.length * 1000, duration: m.time, instruction: m.instruction, name: m.street_names ? m.street_names[0] : '', maneuver: { ...getManeuverInfo(m.type), location: coords[m.begin_shape_index] } }));
+                            return { distance: t.summary.length * 1000, duration: t.summary.time, geometry: { coordinates: coords }, legs: [{ steps }] };
+                        };
+                        fetchedRoutes.push(processTrip(data.trip));
+                        if (data.alternates) data.alternates.forEach(alt => fetchedRoutes.push(processTrip(alt.trip)));
+
+                        setRoutes(fetchedRoutes); setActiveRouteIdx(0); setCurrentStepIndex(0); spokenStepsRef.current = {}; 
+                        drawRoutesOnMap(fetchedRoutes, 0, selectedVehicle);
+                    } else { showToast("Gagal menemukan jalur satelit."); }
+                } catch (e) { showToast("Sistem satelit rute belum merespons."); }
+            };
+
+            const drawRoutesOnMap = (routesArr, activeIdx, vType) => {
+                layersRef.current.routeLines.forEach(l => l.remove()); layersRef.current.routeLines = [];
+                const map = mapInstanceRef.current;
+                
+                routesArr.forEach((rt, idx) => {
+                    if (idx === activeIdx) return;
+                    const coords = rt.geometry.coordinates.map(c => [c[1], c[0]]);
+                    const line = window.L.polyline(coords, { color: '#94a3b8', weight: 6, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }).on('click', () => { setActiveRouteIdx(idx); setCurrentStepIndex(0); spokenStepsRef.current = {}; drawRoutesOnMap(routesArr, idx, vType); }).addTo(map);
+                    layersRef.current.routeLines.push(line);
+                });
+
+                if (routesArr[activeIdx]) {
+                    const mainColor = vType === 'motor' ? '#10b981' : '#3b82f6';
+                    const mainCoords = routesArr[activeIdx].geometry.coordinates.map(c => [c[1], c[0]]);
+                    layersRef.current.routeLines.push(window.L.polyline(mainCoords, { color: '#ffffff', weight: 14, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(map));
+                    layersRef.current.routeLines.push(window.L.polyline(mainCoords, { color: mainColor, weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map));
+                    if (stateRefs.current.appMode !== 'navigating') { map.fitBounds(layersRef.current.routeLines[layersRef.current.routeLines.length - 1].getBounds(), { padding: [80, 80] }); }
+                }
+            };
+
+            const executeSearch = async () => {
+                if (!searchQuery || searchQuery.length < 3) { setSearchResults([]); return; }
+                setIsSearching(true);
+                try {
+                    const locRef = stateRefs.current.currentLoc;
+                    const [nomRes, photonRes] = await Promise.allSettled([
+                        fetch(`${NOMINATIM_BASE_URL}?q=${encodeURIComponent(searchQuery)}&format=json&limit=5&countrycodes=id`),
+                        fetch(`${PHOTON_BASE_URL}?q=${encodeURIComponent(searchQuery)}&limit=5&lat=${locRef.lat}&lon=${locRef.lon}`)
+                    ]);
+
+                    let combinedResults = [];
+                    if (photonRes.status === 'fulfilled') {
+                        const data = await photonRes.value.json();
+                        if (data.features) combinedResults = [...combinedResults, ...data.features.map(f => {
+                            const p = f.properties; return { id: `pho_${p.osm_id || Math.random()}`, name: p.name || p.street || p.city || 'Lokasi', description: [p.street, p.city, p.state].filter(Boolean).join(', '), lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], source: 'Satelit', isPOI: !!p.osm_value };
+                        })];
+                    }
+                    if (nomRes.status === 'fulfilled') {
+                        const data = await nomRes.value.json();
+                        combinedResults = [...combinedResults, ...data.map(i => ({ id: `nom_${i.place_id}`, name: i.name || i.display_name.split(',')[0], description: i.display_name, lat: parseFloat(i.lat), lon: parseFloat(i.lon), source: 'Satelit', isPOI: false }))];
+                    }
+                    const uniqueResults = [];
+                    combinedResults.forEach(item => { if (!uniqueResults.some(u => u.name.toLowerCase() === item.name.toLowerCase() || (Math.abs(u.lat - item.lat) < 0.0005 && Math.abs(u.lon - item.lon) < 0.0005)) && item.name) uniqueResults.push(item); });
+                    setSearchResults(uniqueResults.slice(0, 8)); 
+                } catch (e) {} finally { setIsSearching(false); }
+            };
+
+            const selectDestination = async (p) => {
+                const dest = { lat: p.lat, lon: p.lon, name: p.name };
+                setDestination(dest); setSearchResults([]); setSearchQuery(p.name);
+                if (layersRef.current.dest) layersRef.current.dest.remove();
+                layersRef.current.dest = window.L.marker([dest.lat, dest.lon]).addTo(mapInstanceRef.current);
+                setIsTracking(false); setAppMode('intent_selection');
+                fetchRouteData(dest.lat, dest.lon, vehicle, avoidToll);
+            };
+
+            const startNavigation = () => {
+                if (routes.length === 0) { showToast("Harap menunggu garis rute ditampilkan penuh."); return; }
+                const mainRoute = routes[activeRouteIdx];
+                let startHeading = currentLoc.heading;
+                if (mainRoute.geometry.coordinates.length > 1) { const c0 = mainRoute.geometry.coordinates[0], c1 = mainRoute.geometry.coordinates[1]; startHeading = calculateBearing(c0[1], c0[0], c1[1], c1[0]); }
+                const newLoc = { ...currentLoc, heading: startHeading };
+                setCurrentLoc(newLoc);
+                if (evMode) setEvRealtime({ currentPct: evConfig.startPct, consumedWh: 0, distanceTraveledNav: 0 });
+
+                setAppMode('navigating'); setIsTracking(true); 
+                if (mapInstanceRef.current) mapInstanceRef.current.setView([newLoc.lat, newLoc.lon], 19, { animate: true });
+                updateUserMarker(newLoc, true, vehicle); 
+                speakInstruction(`Memulai instruksi ke ${destination.name}. Silakan persiapkan diri.`);
+            };
+
+            const formatDistVisual = (meters) => { if (meters > 1000) return [(meters / 1000).toFixed(1), ' KM']; return [Math.round(meters).toString(), ' Meter']; };
+
+            let maneuverText = "Lurus terus", ManeuverIcon = ArrowUp, instructionName = "", currentModifier = "straight";
+            let remainingDistance = 0, distToNextStep = 0, currentSpeedKmh = (currentLoc.speed * 3.6);
+            let activeRoute = routes[activeRouteIdx];
+
+            if (activeRoute && activeRoute.legs && activeRoute.legs[0].steps) {
+                const steps = activeRoute.legs[0].steps; const targetIdx = Math.min(currentStepIndex + 1, steps.length - 1); const nextStep = steps[targetIdx];
+                distToNextStep = getDistance(currentLoc.lat, currentLoc.lon, nextStep.maneuver.location[1], nextStep.maneuver.location[0]); remainingDistance = distToNextStep;
+                for (let i = targetIdx + 1; i < steps.length; i++) remainingDistance += steps[i].distance;
+                const mn = nextStep.maneuver; currentModifier = mn.modifier || 'straight';
+                
+                if (mn.type === 'arrive' || targetIdx === steps.length - 1) {
+                    maneuverText = 'Tujuan Dekat'; ManeuverIcon = MapPin; instructionName = destination?.name || "Titik Tujuan"; currentModifier = 'arrive';
+                } else {
+                    maneuverText = mn.text;
+                    switch (mn.modifier) {
+                        case 'uturn': ManeuverIcon = RefreshCcw; break; case 'sharp right': ManeuverIcon = CornerDownRight; break; case 'right': ManeuverIcon = ArrowRight; break;
+                        case 'slight right': ManeuverIcon = ArrowUpRight; break; case 'sharp left': ManeuverIcon = CornerDownLeft; break; case 'left': ManeuverIcon = ArrowLeft; break;
+                        case 'slight left': ManeuverIcon = ArrowUpLeft; break; default: ManeuverIcon = ArrowUp; break;
+                    }
+                    instructionName = nextStep.name ? `Menuju ke ${nextStep.name}` : `Ikuti jalan utama`;
+                }
+            }
+
+            const hudStyles = getManeuverStyles(currentModifier);
+            const [distVal, distUnit] = formatDistVisual(distToNextStep);
+
+            let estDurationSeconds = 0;
+            if (activeRoute) {
+                const routeTotalDist = activeRoute.distance || 1; const routeTotalDur = activeRoute.duration || 0;
+                if (currentSpeedKmh > 5) { estDurationSeconds = ((remainingDistance / (currentSpeedKmh / 3.6)) * 0.6) + (((remainingDistance / routeTotalDist) * routeTotalDur) * 0.4); } 
+                else { estDurationSeconds = (remainingDistance / routeTotalDist) * routeTotalDur; }
+            }
+
+            const remainingMinutes = Math.max(1, Math.round(estDurationSeconds / 60));
+            const arrivalDate = new Date(Date.now() + estDurationSeconds * 1000);
+            const arrivalTimeStr = arrivalDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const [remDistVal, remDistUnit] = formatDistVisual(remainingDistance);
+            const mapCSSRotation = (isTracking && appMode === 'navigating') ? -currentLoc.heading : 0;
+
+            const getEvEstimateOnlyNumbers = () => {
+                if (!evMode || !activeRoute) return null;
+                const totalWh = evConfig.capacityAh * evConfig.voltage; 
+                const currentRemainingWh = (evRealtime.currentPct / 100) * totalWh; 
+                const distRemainKm = remainingDistance / 1000;
+                
+                const physAgg = calculateEvPhysics(evConfig.capacityAh, evConfig.voltage, evConfig.motorWatt, vehicle === 'motor' ? 60 : 80, vehicle);
+                const physEco = calculateEvPhysics(evConfig.capacityAh, evConfig.voltage, evConfig.motorWatt, vehicle === 'motor' ? 35 : 50, vehicle);
+                
+                const ecoRem = currentRemainingWh - (distRemainKm * physEco.efficiency);
+                const aggRem = currentRemainingWh - (distRemainKm * physAgg.efficiency);
+                
+                let ecoPct = Math.max(0, Math.min(100, (ecoRem / totalWh) * 100)); let aggPct = Math.max(0, Math.min(100, (aggRem / totalWh) * 100));
+                if (ecoPct === 0 && aggPct === 0) return "0%"; if (Math.abs(ecoPct - aggPct) < 2) return `${ecoPct.toFixed(0)}%`;
+                return `${aggPct.toFixed(0)}-${ecoPct.toFixed(0)}%`;
+            };
+
+            return (
+                <div className="relative w-full h-full min-h-screen bg-slate-900 overflow-hidden select-none">
+                    {/* Profil / Settings Modal */}
+                    {showProfile && (
+                        <div className="absolute inset-0 z-[9000] bg-slate-900/60 backdrop-blur-sm flex justify-center items-start pt-[90px] px-4 pb-6" onClick={() => setShowProfile(false)}>
+                            <div className="w-full max-w-[500px] bg-white rounded-[2rem] shadow-2xl flex flex-col max-h-full pointer-events-auto animate-slide-down" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex-shrink-0 px-5 pt-5 pb-0">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-2"><User className="w-6 h-6 md:w-7 md:h-7 text-blue-600" /> Profil Pengguna</h2>
+                                        <button onClick={() => setShowProfile(false)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition"><X className="w-4 h-4"/></button>
+                                    </div>
+                                    <div className="flex border-b border-slate-200">
+                                        <button className={`flex-1 pb-3 text-sm font-bold border-b-2 transition flex items-center justify-center gap-2 ${profileTab === 'settings' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`} onClick={() => setProfileTab('settings')}><Settings className="w-4 h-4"/> Pengaturan</button>
+                                        <button className={`flex-1 pb-3 text-sm font-bold border-b-2 transition flex items-center justify-center gap-2 ${profileTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`} onClick={() => setProfileTab('history')}><History className="w-4 h-4"/> Riwayat</button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto hide-scrollbar p-5">
+                                    {profileTab === 'settings' ? (
+                                        <div className="space-y-5">
+                                            <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Nama Pengendara</label><input type="text" value={userSettings.name} onChange={e => setUserSettings({...userSettings, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500 transition"/></div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Pilihan Jalan</label>
+                                                <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer" onClick={() => setUserSettings({...userSettings, avoidAlleys: !userSettings.avoidAlleys})}>
+                                                    <div><div className="font-bold text-slate-700">Hindari Jalan Tikus yang Sempit</div><div className="text-xs text-slate-500">Memprioritaskan jalan raya besar</div></div>
+                                                    <div className={`w-12 h-7 rounded-full relative transition-colors ${userSettings.avoidAlleys ? 'bg-blue-600' : 'bg-slate-300'}`}><div className={`absolute top-[2px] left-[2px] bg-white rounded-full h-6 w-6 transition-transform ${userSettings.avoidAlleys ? 'translate-x-full' : 'translate-x-0'}`}></div></div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Kendaraan Utama</label>
+                                                <div className="flex gap-3">
+                                                    <button onClick={() => { setUserSettings({...userSettings, defaultVehicle: 'car'}); setVehicle('car'); }} className={`flex-1 py-3 rounded-xl font-bold border-2 flex items-center justify-center gap-2 transition ${userSettings.defaultVehicle === 'car' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-white border-slate-200 text-slate-500'}`}><Car className="w-5 h-5" /> Mobil</button>
+                                                    <button onClick={() => { setUserSettings({...userSettings, defaultVehicle: 'motor'}); setVehicle('motor'); }} className={`flex-1 py-3 rounded-xl font-bold border-2 flex items-center justify-center gap-2 transition ${userSettings.defaultVehicle === 'motor' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-white border-slate-200 text-slate-500'}`}><Bike className="w-5 h-5" /> Motor</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            {tripHistory.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center h-48 text-center px-4"><MapPin className="w-10 h-10 text-slate-300 mb-2" /><p className="font-bold text-slate-500">Belum Ada Catatan Perjalanan</p></div>
+                                            ) : (
+                                                <div className="space-y-3 pb-2">
+                                                    {tripHistory.map(trip => (
+                                                        <div key={trip.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm">
+                                                            <div className="flex justify-between items-start mb-2"><h3 className="font-bold text-slate-800 text-sm line-clamp-1">{trip.destination}</h3><span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">{trip.date}</span></div>
+                                                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><div className="text-[10px] font-bold text-slate-500 mb-0.5">Jarak Tempuh</div><div className="text-sm font-black text-slate-700">{trip.distanceKm} KM</div></div>
+                                                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100"><div className="text-[10px] font-bold text-slate-500 mb-0.5">Estimasi Biaya Daya</div><div className="text-sm font-black text-amber-600">{formatRp(trip.cost)}</div></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                {profileTab === 'settings' && (<div className="flex-shrink-0 p-5 border-t border-slate-100"><button onClick={() => setShowProfile(false)} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl hover:bg-slate-700 transition">Simpan Pengaturan</button></div>)}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* DYNAMIC TOAST UI (Sistem Informasi Tunggal Berwarna Netral/Gelap) */}
+                    {toast.visible && (
+                        <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-[99999] text-white px-6 py-3.5 rounded-full shadow-2xl animate-toast text-sm font-bold border bg-slate-800 border-slate-700`}>
+                            {toast.msg}
+                        </div>
+                    )}
+
+                    <div className="map-wrapper" style={{ transform: `translate(-50%, -50%) rotate(${mapCSSRotation}deg)` }} onTouchStart={() => setIsTracking(false)} onMouseDown={() => setIsTracking(false)}>
+                        <div id="map-inner" ref={mapContainerRef} className="w-full h-full"></div>
+                    </div>
+
+                    {appMode !== 'intent_selection' && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-4">
+                            {!isTracking ? (
+                                <button onClick={() => { 
+                                    startGpsTracking(); 
+                                    if(mapInstanceRef.current && currentLoc.lat !== DEFAULT_LOC.lat) mapInstanceRef.current.setView([currentLoc.lat, currentLoc.lon], 19, { animate: true }); 
+                                }} className="glass-white text-slate-700 p-3.5 rounded-full shadow-xl hover:bg-white pointer-events-auto transition">
+                                    {appMode === 'navigating' ? <Compass className="w-6 h-6" /> : <LocateFixed className="w-6 h-6" />}
+                                </button>
+                            ) : (
+                                appMode === 'navigating' && (
+                                    <button onClick={stopNavigation} className="glass-white text-slate-700 p-3.5 rounded-full shadow-xl hover:bg-white pointer-events-auto transition">
+                                        <Power className="w-6 h-6" />
+                                    </button>
+                                )
+                            )}
+                            <button onClick={() => setVoiceEnabled(!voiceEnabled)} className="glass-white text-slate-700 p-3.5 rounded-full shadow-xl hover:bg-white pointer-events-auto transition">{voiceEnabled ? <Volume2 className="w-6 h-6 text-emerald-500"/> : <VolumeX className="w-6 h-6 text-red-500"/>}</button>
+                            <div className="glass-white rounded-[1.5rem] shadow-xl flex flex-col overflow-hidden pointer-events-auto"><button onClick={() => mapInstanceRef.current?.zoomIn()} className="p-3.5 text-slate-700 border-b border-slate-200 hover:bg-slate-50 transition"><Plus className="w-6 h-6" /></button><button onClick={() => mapInstanceRef.current?.zoomOut()} className="p-3.5 text-slate-700 hover:bg-slate-50 transition"><Minus className="w-6 h-6" /></button></div>
+                        </div>
+                    )}
+
+                    {appMode === 'explore' && (
+                        <div className="absolute top-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[500px] z-40 transition-all">
+                            <div className="flex gap-2 w-full">
+                                <button onClick={() => setShowProfile(true)} className="glass-white shadow-xl w-[60px] h-[60px] rounded-[2rem] flex items-center justify-center flex-shrink-0 text-slate-700 hover:bg-white border border-slate-200"><User className="w-7 h-7" /></button>
+                                <div className="glass-white shadow-2xl rounded-[2rem] p-2 flex items-center gap-2 flex-1 min-w-0">
+                                    <input className="flex-1 min-w-0 bg-transparent outline-none font-bold text-slate-800 placeholder:text-slate-400 text-lg pl-4" placeholder="Cari alamat atau tujuan..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') executeSearch(); }} />
+                                    {isSearching ? <Loader2 className="w-6 h-6 animate-spin text-blue-500 mr-2 flex-shrink-0" /> : <button onClick={executeSearch} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-colors flex-shrink-0"><Search className="w-5 h-5" /></button>}
+                                </div>
+                            </div>
+                            {searchResults.length > 0 && (
+                                <div className="mt-3 glass-white rounded-3xl shadow-2xl overflow-hidden max-h-[50vh] overflow-y-auto">
+                                    {searchResults.map((p, i) => (
+                                        <button key={i} onClick={() => selectDestination(p)} className="w-full p-4 text-left hover:bg-slate-50/80 border-b border-slate-100/50 flex gap-4 transition items-start last:border-0">
+                                            <div className="mt-0.5 bg-slate-100 p-2 rounded-xl">{p.isPOI ? <Star className="w-5 h-5 text-amber-500" fill="currentColor"/> : <MapIcon className="w-5 h-5 text-blue-500" />}</div>
+                                            <div className="flex-1"><p className="font-bold text-slate-800 text-[15px] line-clamp-1">{p.name}</p><p className="text-[12px] text-slate-500 line-clamp-1 mt-0.5">{p.description}</p></div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {appMode === 'navigating' && (
+                        <>
+                            <div className="absolute top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-[460px] z-50 pointer-events-none transition-all duration-500">
+                                <div className={`${hudStyles.card} bg-opacity-95 backdrop-blur-xl p-4 md:p-5 rounded-[2.5rem] shadow-2xl flex items-center gap-4 border pointer-events-auto transition-colors duration-500`}>
+                                    <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center flex-shrink-0 ${hudStyles.iconBg}`}><ManeuverIcon className="w-9 h-9" /></div>
+                                    <div className="flex-1 overflow-hidden pr-2">
+                                        <div className="flex items-end gap-2 mb-0.5"><span className="text-[2.75rem] font-black leading-none">{distVal}</span><span className={`font-bold text-xs uppercase tracking-widest pb-1.5 ${hudStyles.accent}`}>{distUnit}</span></div>
+                                        <h2 className="text-sm font-semibold truncate leading-tight opacity-90">{instructionName}</h2>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-[500px] z-50 pointer-events-none">
+                                <div className="glass-dark rounded-[2.5rem] shadow-2xl p-2.5 flex items-center justify-between pointer-events-auto text-white">
+                                    <div className="flex flex-col items-center px-4 md:px-6 border-r border-white/10 w-24 md:w-28"><span className={`text-[2.5rem] font-black leading-none ${vehicle === 'motor' ? 'text-emerald-400' : 'text-blue-400'}`}>{currentSpeedKmh.toFixed(0)}</span><span className="text-[10px] font-bold text-slate-400 uppercase mt-1">KM / JAM</span></div>
+                                    <div className="flex-1 px-4 flex flex-col justify-center items-center"><div className="flex items-baseline gap-1"><span className="text-4xl font-black text-white leading-none">{remainingMinutes}</span><span className="text-sm font-bold text-emerald-400">Menit</span></div><div className="flex items-center gap-2 mt-1"><span className="text-sm font-semibold text-slate-300">{remDistVal} {remDistUnit}</span><span className="w-1 h-1 rounded-full bg-slate-600"></span><span className="text-xs font-bold text-slate-400">{arrivalTimeStr}</span></div></div>
+                                    <div className="px-2 pr-4 flex flex-col items-center gap-1.5 w-24">
+                                        <div className={`w-[60px] h-[60px] rounded-[1.5rem] flex items-center justify-center relative overflow-hidden ${evMode ? 'bg-slate-800' : (vehicle === 'motor' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400')}`}>
+                                            {evMode ? (<><div className={`absolute bottom-0 left-0 right-0 transition-all ${evRealtime.currentPct > 20 ? 'bg-blue-500' : 'bg-red-500'}`} style={{ height: `${evRealtime.currentPct}%` }}></div><Zap className="w-8 h-8 text-white/30 absolute z-10" fill="currentColor" /><span className="text-sm font-black text-white z-20 drop-shadow-sm">{evRealtime.currentPct.toFixed(0)}<span className="text-[10px]">%</span></span></>) : ( vehicle === 'motor' ? <Bike className="w-8 h-8" /> : <Car className="w-8 h-8" /> )}
+                                        </div>
+                                        {evMode && <span className="text-[10px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-lg w-full text-center">{getEvEstimateOnlyNumbers()}</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {appMode === 'intent_selection' && (
+                        <div className="absolute inset-0 z-50 pointer-events-none flex items-end justify-center pb-0 md:items-center">
+                            <div className="bg-white/95 backdrop-blur-xl pointer-events-auto w-full md:w-[480px] rounded-t-[2.5rem] md:rounded-[2.5rem] p-6 md:p-8 shadow-2xl animate-modal max-h-[90vh] overflow-y-auto hide-scrollbar">
+                                <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-6 md:hidden"></div>
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="flex-1 pr-4">
+                                        <h2 className="text-xl font-black text-slate-800 mb-3">{destination?.name}</h2>
+                                        <div className="flex gap-3"><span className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${vehicle === 'motor' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}><Clock className="w-3.5 h-3.5" /> {activeRoute ? Math.round(activeRoute.duration / 60) : '--'} Menit</span><span className="bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5"><Route className="w-3.5 h-3.5" /> {activeRoute ? formatDistVisual(activeRoute.distance).join(' ') : '--'}</span></div>
+                                    </div>
+                                    <button onClick={() => { setAppMode('explore'); setIsTracking(true); layersRef.current.routeLines.forEach(l=>l.remove()); }} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500"><X className="w-5 h-5"/></button>
+                                </div>
+
+                                {routes.length > 1 && (
+                                    <div className="mb-6 flex gap-2 overflow-x-auto hide-scrollbar pb-2">
+                                        {routes.map((rt, idx) => ( <button key={idx} onClick={() => { setActiveRouteIdx(idx); drawRoutesOnMap(routes, idx, vehicle); }} className={`flex-shrink-0 px-4 py-2.5 rounded-[1rem] text-sm font-bold border-2 ${activeRouteIdx === idx ? (vehicle === 'motor' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-blue-50 border-blue-400 text-blue-700') : 'bg-white border-slate-200 text-slate-500'}`}>Rute Alternatif {idx + 1}</button> ))}
+                                    </div>
+                                )}
+
+                                <div className="flex w-[60%] mx-auto bg-slate-100 p-1 rounded-xl mb-6 relative"><div className={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm transition-transform ${vehicle === 'motor' ? 'translate-x-full' : 'translate-x-0'}`}></div><button onClick={() => { setVehicle('car'); setAvoidToll(false); fetchRouteData(destination.lat, destination.lon, 'car', false); }} className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5 z-10 ${vehicle === 'car' ? 'text-blue-700' : 'text-slate-500'}`}><Car className="w-4 h-4" /> Mobil</button><button onClick={() => { setVehicle('motor'); setAvoidToll(true); fetchRouteData(destination.lat, destination.lon, 'motor', true); }} className={`flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5 z-10 ${vehicle === 'motor' ? 'text-emerald-700' : 'text-slate-500'}`}><Bike className="w-4 h-4" /> Motor</button></div>
+
+                                {vehicle === 'car' && (<div className="flex items-center justify-between mb-6 px-2 bg-slate-50 p-4 rounded-2xl"><div className="flex items-center gap-3"><div className="p-2 bg-white rounded-lg"><Route className="w-4 h-4 text-slate-600"/></div><span className="text-sm font-bold text-slate-700">Hindari Jalan Tol</span></div><label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" className="sr-only peer" checked={avoidToll} onChange={(e) => { setAvoidToll(e.target.checked); fetchRouteData(destination.lat, destination.lon, vehicle, e.target.checked); }}/><div className="w-12 h-7 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div></label></div>)}
+
+                                <div className="mb-8 border border-slate-200 rounded-[1.5rem] overflow-hidden bg-white">
+                                    <div className={`flex items-center justify-between p-4 cursor-pointer ${evMode ? 'bg-blue-50 border-b border-blue-100' : ''}`} onClick={() => setEvMode(!evMode)}><div className="flex items-center gap-3"><div className={`p-2 rounded-xl ${evMode ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Zap className="w-5 h-5"/></div><span className={`text-sm font-bold ${evMode ? 'text-blue-800' : 'text-slate-700'}`}>Tampilkan Data Kendaraan Listrik</span></div><div className={`w-12 h-7 rounded-full relative ${evMode ? 'bg-blue-600' : 'bg-slate-300'}`}><div className={`absolute top-[2px] left-[2px] bg-white rounded-full h-6 w-6 transition-transform ${evMode ? 'translate-x-full' : 'translate-x-0'}`}></div></div></div>
+                                    {evMode && (
+                                        <div className="p-5 grid grid-cols-2 gap-4">
+                                            <div><label className="block text-[10px] font-bold text-slate-500">Kapasitas (Ah)</label><input type="number" value={evConfig.capacityAh} onChange={e => {setEvConfig({...evConfig, capacityAh: Number(e.target.value)}); setUserSettings(p => ({...p, evConfig: {...p.evConfig, capacityAh: Number(e.target.value)}}));}} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold"/></div>
+                                            <div><label className="block text-[10px] font-bold text-slate-500">Voltase Baterai (V)</label><input type="number" value={evConfig.voltage} onChange={e => {setEvConfig({...evConfig, voltage: Number(e.target.value)}); setUserSettings(p => ({...p, evConfig: {...p.evConfig, voltage: Number(e.target.value)}}));}} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold"/></div>
+                                            <div><label className="block text-[10px] font-bold text-slate-500">Daya Dinamo Motor (W)</label><input type="number" value={evConfig.motorWatt} onChange={e => {setEvConfig({...evConfig, motorWatt: Number(e.target.value)}); setUserSettings(p => ({...p, evConfig: {...p.evConfig, motorWatt: Number(e.target.value)}}));}} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-bold"/></div>
+                                            <div><label className="block text-[10px] font-bold text-blue-600">Sisa Baterai Saat Ini (%)</label><input type="number" max="100" min="1" value={evConfig.startPct} onChange={e => setEvConfig({...evConfig, startPct: Number(e.target.value)})} className="w-full bg-blue-50 border border-blue-200 p-3 rounded-xl font-black text-blue-700"/></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button onClick={startNavigation} className={`w-full text-white font-black py-4 text-lg rounded-[1.25rem] flex items-center justify-center gap-3 shadow-xl ${vehicle === 'motor' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'}`}><Navigation className="w-6 h-6 fill-white" /> MULAI JALAN</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        function App() {
+            const checkStandaloneStatus = () => {
+                const isDisplayStandalone = window.matchMedia('(display-mode: standalone)').matches;
+                const isNavStandalone = window.navigator.standalone === true;
+                const isUrlStandalone = new URLSearchParams(window.location.search).get('mode') === 'pwa';
+                return isDisplayStandalone || isNavStandalone || isUrlStandalone;
+            };
+
+            const [isStandalone, setIsStandalone] = useState(checkStandaloneStatus());
+            const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+            useEffect(() => {
+                const mediaQuery = window.matchMedia('(display-mode: standalone)');
+                const handleChange = () => setIsStandalone(checkStandaloneStatus());
+                mediaQuery.addEventListener('change', handleChange);
+                window.addEventListener('popstate', handleChange);
+                window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
+                window.addEventListener('appinstalled', () => { setDeferredPrompt(null); setTimeout(() => setIsStandalone(checkStandaloneStatus()), 1000); });
+                return () => { mediaQuery.removeEventListener('change', handleChange); window.removeEventListener('popstate', handleChange); };
+            }, []);
+
+            const handleInstallReadyClick = async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') setDeferredPrompt(null);
+                    return true;
+                }
+                return false; 
+            };
+
+            if (!isStandalone) return <LandingPage onInstallReady={handleInstallReadyClick} />;
+            return <RidingNavigation />;
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
